@@ -2,7 +2,14 @@
   "permissions": {
     "allow": [
       "Bash(npm --version)",
-      "Bash(npx --yes create-next-app@latest . --typescript --tailwind --app --src-dir --eslint --no-turbopack --import-alias \"@/*\" --use-npm --yes)"
+      "Bash(npx --yes create-next-app@latest . --typescript --tailwind --app --src-dir --eslint --no-turbopack --import-alias \"@/*\" --use-npm --yes)",
+      "Bash(npm install *)",
+      "Bash(npm view *)",
+      "Bash(node -e \"const l = require\\('lucide-react'\\); console.log\\(typeof l.Mic, typeof l.MicOff, typeof l.Video, typeof l.VideoOff, typeof l.Send, typeof l.Phone, typeof l.PhoneOff, typeof l.MessageSquare, typeof l.Languages, typeof l.Copy, typeof l.Check, typeof l.X, typeof l.ChevronDown, typeof l.ArrowRight\\)\")",
+      "Bash(npm run *)",
+      "Bash(git check-ignore *)",
+      "Bash(git branch *)",
+      "Bash(git add *)"
     ]
   }
 }

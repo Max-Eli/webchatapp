@@ -1,36 +1,84 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Lingo — video chat across languages
 
-## Getting Started
+A 1-on-1 mobile webapp for video calling friends who don't speak your language. Type in your language, your friend reads it in theirs. Translation by Claude.
 
-First, run the development server:
+- **Peer-to-peer video** (WebRTC) — no media server, no per-minute cost.
+- **Peer-to-peer chat** (WebRTC DataChannel) — messages flow direct between browsers.
+- **Live translation** via Claude API — your messages get translated for the receiver, theirs get translated for you.
+- **No accounts** — just shareable room links like `mki-pwfn-xrt`.
+- **Mobile-first** — works in iOS Safari and Android Chrome.
+
+## Setup (one-time, ~5 minutes)
+
+### 1. Get an Anthropic API key
+
+1. Go to https://console.anthropic.com → create an account.
+2. Settings → API Keys → Create Key.
+3. Copy the key (`sk-ant-...`).
+
+### 2. Get Supabase keys (used for WebRTC signaling only — no database needed)
+
+WebRTC needs a tiny "handshake" channel to connect two browsers. Vercel can't host WebSockets, so we use Supabase Realtime for free.
+
+1. Go to https://supabase.com → sign in (GitHub login works).
+2. **New project** → pick any name + region → set a DB password (you won't use it).
+3. Wait ~2 minutes for it to provision.
+4. **Project Settings → API**, copy:
+   - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
+   - **anon public** key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+No tables to create. Realtime is on by default.
+
+### 3. Local environment
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Fill in the three values in `.env.local`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 4. Run
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm install
+npm run dev
+```
 
-## Learn More
+Open http://localhost:3000. Open the generated room link in a second browser (or your phone on the same network — but for getUserMedia on a phone, you'll need HTTPS, which dev mode doesn't have. Easiest: deploy to Vercel and test there).
 
-To learn more about Next.js, take a look at the following resources:
+## Deploy to Vercel
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Push this repo to GitHub.
+2. https://vercel.com/new → import the repo.
+3. Add env vars in **Project Settings → Environment Variables**:
+   - `ANTHROPIC_API_KEY`
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+4. Deploy.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+That's it. Free tier covers everything: Vercel (hobby), Supabase (free), and you only pay for Claude tokens (translation is via Haiku — cents per thousand messages).
 
-## Deploy on Vercel
+## How it works
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+Browser A  ───presence + offer/answer/ICE───▶  Supabase Realtime  ◀───presence + offer/answer/ICE───  Browser B
+   │                                                                                                       │
+   └────────────────── WebRTC peer connection (video + audio + chat data) ─────────────────────────────────┘
+                                                  │
+                                                  ▼
+                                        /api/translate (Claude Haiku)
+                                        called by the receiving peer
+                                        to render foreign-language messages
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Each room is a Supabase Realtime channel `room:<id>`. Both peers track presence and exchange the SDP offer/answer + ICE candidates over `broadcast` events. Once connected, no more signaling traffic.
+- Video/audio tracks and chat messages flow over the direct WebRTC connection — Supabase never sees them.
+- Chat messages carry a language tag. The receiver's client calls `/api/translate` to render foreign-language messages in the reader's language. Originals are toggleable.
+- Translation responses are cached client-side per `(source, target, text)` so changing your language redoes only what's missing.
+
+## Limitations / next steps
+
+- **NAT traversal**: uses public Google STUN. Most consumer networks work, but very strict NATs (corporate / symmetric) need a TURN server. Cheapest path: self-host coturn on a $5 VPS, or pay-as-you-go Twilio TURN (~$0.40/GB).
+- **2 peers per room.** Group calls would need an SFU (LiveKit / mediasoup).
+- **No persistence.** Messages disappear when you reload. Add a Supabase Postgres table if you want history.
+- **No identity verification.** Anyone with the link joins. Fine for a personal app; add auth if you ever need it.
