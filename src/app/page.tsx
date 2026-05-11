@@ -5,6 +5,7 @@ import { useState } from "react";
 import { ArrowRight, Languages, Video } from "lucide-react";
 import { Button } from "@/components/Button";
 import {
+  formatRoomIdInput,
   generateRoomId,
   isValidRoomId,
   normalizeRoomId,
@@ -25,7 +26,7 @@ export default function LandingPage() {
     e.preventDefault();
     const id = normalizeRoomId(joinCode);
     if (!isValidRoomId(id)) {
-      setError("Codes look like aaa-bbbb-ccc (lowercase letters)");
+      setError("Room codes are 10 letters (e.g. aaabbbbccc)");
       return;
     }
     setError(null);
@@ -86,7 +87,7 @@ export default function LandingPage() {
                 <input
                   value={joinCode}
                   onChange={(e) => {
-                    setJoinCode(e.target.value);
+                    setJoinCode(formatRoomIdInput(e.target.value));
                     setError(null);
                   }}
                   placeholder="aaa-bbbb-ccc"
@@ -94,6 +95,7 @@ export default function LandingPage() {
                   autoCapitalize="off"
                   autoCorrect="off"
                   spellCheck={false}
+                  maxLength={12}
                   className="flex-1 h-14 px-4 rounded-2xl bg-[var(--surface)] border border-[var(--border-strong)] text-[15px] font-mono tracking-wider placeholder:text-[var(--text-dim)] placeholder:font-sans placeholder:tracking-normal focus:outline-none focus:border-white/20 transition-colors"
                 />
                 <Button
