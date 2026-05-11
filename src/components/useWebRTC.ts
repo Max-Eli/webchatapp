@@ -45,6 +45,10 @@ export function useWebRTC(opts: Options) {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [micEnabled, setMicEnabled] = useState(true);
   const [camEnabled, setCamEnabled] = useState(true);
+  const [channelState, setChannelState] = useState<string>("idle");
+  const [presenceCount, setPresenceCount] = useState<number>(0);
+  const [iceState, setIceState] = useState<string>("new");
+  const [pcState, setPcState] = useState<string>("new");
 
   const peerIdRef = useRef<string>("");
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -100,10 +104,12 @@ export function useWebRTC(opts: Options) {
     };
     pc.oniceconnectionstatechange = () => {
       log("ice state:", pc.iceConnectionState);
+      setIceState(pc.iceConnectionState);
     };
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState;
       log("pc state:", s);
+      setPcState(s);
       if (s === "connected") setStatus("connected");
       else if (s === "failed") {
         setStatus("connection_failed");
@@ -330,6 +336,7 @@ export function useWebRTC(opts: Options) {
       const state = channel.presenceState();
       const peers = Object.keys(state);
       log("presence sync:", peers);
+      setPresenceCount(peers.length);
 
       if (peers.length > 2) {
         const sorted = [...peers].sort();
@@ -396,12 +403,14 @@ export function useWebRTC(opts: Options) {
 
     await channel.subscribe(async (state) => {
       log("channel state:", state);
+      setChannelState(state);
       if (state === "SUBSCRIBED") {
-        await channel.track({
+        const trackResult = await channel.track({
           peer_id: peerIdRef.current,
           name: optsRef.current.myName,
           joined_at: Date.now(),
         });
+        log("track result:", trackResult);
       } else if (state === "CHANNEL_ERROR" || state === "TIMED_OUT") {
         setError("Could not connect to signaling server");
         setStatus("config_error");
@@ -469,5 +478,13 @@ export function useWebRTC(opts: Options) {
     toggleCam,
     hangup,
     chatReady: dcRef.current?.readyState === "open",
+    diag: {
+      peerId: peerIdRef.current,
+      otherPeerId: otherPeerIdRef.current,
+      channelState,
+      presenceCount,
+      iceState,
+      pcState,
+    },
   };
 }

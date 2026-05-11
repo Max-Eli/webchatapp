@@ -299,6 +299,69 @@ export function RoomClient({ roomId }: { roomId: string }) {
             {linkCopied ? <Check size={12} /> : <Copy size={12} />}
             <span className="font-mono tracking-wider">{roomId}</span>
           </button>
+
+          {/* Diagnostic strip — visible until connected, helps debug pairing */}
+          {rtc.status !== "connected" && (
+            <div className="px-3 py-1.5 rounded-xl glass text-[10px] font-mono leading-tight text-[var(--text-muted)] max-w-[260px]">
+              <div>
+                channel:{" "}
+                <span
+                  className={cn(
+                    rtc.diag.channelState === "SUBSCRIBED"
+                      ? "text-[var(--accent)]"
+                      : "text-amber-400"
+                  )}
+                >
+                  {rtc.diag.channelState}
+                </span>
+              </div>
+              <div>
+                in room:{" "}
+                <span
+                  className={cn(
+                    rtc.diag.presenceCount >= 2
+                      ? "text-[var(--accent)]"
+                      : "text-amber-400"
+                  )}
+                >
+                  {rtc.diag.presenceCount}
+                </span>
+                <span className="text-[var(--text-dim)]"> / 2</span>
+              </div>
+              <div>
+                ice:{" "}
+                <span
+                  className={cn(
+                    rtc.diag.iceState === "connected" ||
+                      rtc.diag.iceState === "completed"
+                      ? "text-[var(--accent)]"
+                      : rtc.diag.iceState === "failed"
+                      ? "text-[var(--danger)]"
+                      : "text-[var(--text-dim)]"
+                  )}
+                >
+                  {rtc.diag.iceState}
+                </span>{" "}
+                · pc:{" "}
+                <span
+                  className={cn(
+                    rtc.diag.pcState === "connected"
+                      ? "text-[var(--accent)]"
+                      : rtc.diag.pcState === "failed"
+                      ? "text-[var(--danger)]"
+                      : "text-[var(--text-dim)]"
+                  )}
+                >
+                  {rtc.diag.pcState}
+                </span>
+              </div>
+              <div className="text-[var(--text-dim)]">
+                me: {rtc.diag.peerId.slice(0, 6)}
+                {rtc.diag.otherPeerId &&
+                  ` · peer: ${rtc.diag.otherPeerId.slice(0, 6)}`}
+              </div>
+            </div>
+          )}
         </div>
 
         <LanguageSelect value={lang} onChange={setLang} compact />
