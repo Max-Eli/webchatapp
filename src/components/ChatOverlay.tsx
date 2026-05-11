@@ -14,7 +14,14 @@ type Props = {
   connected: boolean;
 };
 
-const MAX_BODY_HEIGHT = 320;
+// Cap chat to never cover more than ~25% of the viewport, so it can't
+// block the other caller's face no matter how many messages there are.
+const MAX_BODY_HEIGHT_CSS = "min(200px, 26dvh)";
+
+// Soft fade at the top of the message stack — older messages dissolve
+// into transparency as they scroll up instead of clipping at a hard edge.
+const FADE_MASK =
+  "linear-gradient(to bottom, transparent 0, rgba(0,0,0,0.15) 12px, rgba(0,0,0,1) 56px)";
 
 // Heavy text-shadow makes white text legible over any video background
 // without needing a panel backdrop.
@@ -66,7 +73,11 @@ export function ChatOverlay({ messages, myLang, onSend, connected }: Props) {
           ref={scrollRef}
           onScroll={onScroll}
           className="pointer-events-auto overflow-y-auto space-y-1 pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          style={{ maxHeight: MAX_BODY_HEIGHT }}
+          style={{
+            maxHeight: MAX_BODY_HEIGHT_CSS,
+            maskImage: FADE_MASK,
+            WebkitMaskImage: FADE_MASK,
+          }}
         >
           {messages.map((m) => (
             <StreamMessage key={m.id} message={m} myLang={myLang} />
