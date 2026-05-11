@@ -59,6 +59,8 @@ export function useWebRTC(opts: Options) {
   const localStreamRef = useRef<MediaStream | null>(null);
   const startedRef = useRef<boolean>(false);
   const pendingIceRef = useRef<RTCIceCandidateInit[]>([]);
+  const iceServersRef = useRef<RTCIceServer[]>(ICE_SERVERS);
+  const [iceSource, setIceSource] = useState<string>("default");
 
   if (!peerIdRef.current && typeof crypto !== "undefined") {
     peerIdRef.current = crypto.randomUUID();
@@ -87,7 +89,7 @@ export function useWebRTC(opts: Options) {
   }, []);
 
   const createPeerConnection = useCallback(() => {
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const pc = new RTCPeerConnection({ iceServers: iceServersRef.current });
     pc.onicecandidate = (e) => {
       const other = otherPeerIdRef.current;
       if (e.candidate && other) {
@@ -277,6 +279,30 @@ export function useWebRTC(opts: Options) {
       setStatus("config_error");
       startedRef.current = false;
       return;
+    }
+
+    // Fetch ICE servers (may include freshly-minted TURN creds)
+    try {
+      const r = await fetch("/api/ice");
+      if (r.ok) {
+        const data = (await r.json()) as {
+          iceServers?: RTCIceServer[];
+          source?: string;
+        };
+        if (Array.isArray(data.iceServers) && data.iceServers.length > 0) {
+          iceServersRef.current = data.iceServers;
+          setIceSource(data.source ?? "unknown");
+          log(
+            "ice servers from",
+            data.source,
+            "(",
+            data.iceServers.length,
+            "entries)"
+          );
+        }
+      }
+    } catch {
+      log("ice fetch failed, using defaults");
     }
 
     let stream: MediaStream;
@@ -485,6 +511,7 @@ export function useWebRTC(opts: Options) {
       presenceCount,
       iceState,
       pcState,
+      iceSource,
     },
   };
 }

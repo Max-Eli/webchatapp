@@ -360,6 +360,9 @@ export function RoomClient({ roomId }: { roomId: string }) {
                 {rtc.diag.otherPeerId &&
                   ` · peer: ${rtc.diag.otherPeerId.slice(0, 6)}`}
               </div>
+              <div className="text-[var(--text-dim)]">
+                turn: {rtc.diag.iceSource}
+              </div>
             </div>
           )}
         </div>
