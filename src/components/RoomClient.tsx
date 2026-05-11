@@ -15,9 +15,9 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/Button";
 import { LanguageSelect } from "@/components/LanguageSelect";
-import { ChatPanel } from "@/components/ChatPanel";
+import { ChatOverlay } from "@/components/ChatOverlay";
 import { VideoTile } from "@/components/VideoTile";
-import { type ChatMessage } from "@/components/Message";
+import { type ChatMessage } from "@/lib/chat";
 import { useWebRTC } from "@/components/useWebRTC";
 import { cn } from "@/lib/cn";
 import type { ChatPayload } from "@/lib/webrtc";
@@ -48,13 +48,10 @@ export function RoomClient({ roomId }: { roomId: string }) {
   const [lang, setLang] = useState<string>("en");
   const [peerName, setPeerName] = useState<string>("Friend");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [chatOpen, setChatOpen] = useState(false);
-  const [unread, setUnread] = useState(0);
   const [linkCopied, setLinkCopied] = useState(false);
 
   const translationCacheRef = useRef<Map<string, string>>(new Map());
   const inFlightRef = useRef<Set<string>>(new Set());
-  const seenIdsRef = useRef<Set<string>>(new Set());
 
   // Hydrate name/lang on mount
   useEffect(() => {
@@ -183,22 +180,6 @@ export function RoomClient({ roomId }: { roomId: string }) {
         });
     }
   }, [messages, lang]);
-
-  // Track unread when chat closed
-  useEffect(() => {
-    if (chatOpen) {
-      setUnread(0);
-      messages.forEach((m) => seenIdsRef.current.add(m.id));
-      return;
-    }
-    let added = 0;
-    for (const m of messages) {
-      if (seenIdsRef.current.has(m.id)) continue;
-      seenIdsRef.current.add(m.id);
-      if (!m.mine) added += 1;
-    }
-    if (added > 0) setUnread((u) => u + added);
-  }, [messages, chatOpen]);
 
   function handleSendChat(text: string) {
     const payload = rtc.sendMessage(text);
@@ -367,16 +348,11 @@ export function RoomClient({ roomId }: { roomId: string }) {
         </div>
       </div>
 
-      {/* Chat overlay */}
-      <ChatPanel
+      {/* Stream-style chat overlay (always visible) */}
+      <ChatOverlay
         messages={messages}
         myLang={lang}
-        onLangChange={setLang}
         onSend={handleSendChat}
-        open={chatOpen}
-        onOpenChange={setChatOpen}
-        unread={unread}
-        onMarkRead={() => setUnread(0)}
         connected={rtc.status === "connected"}
       />
 
