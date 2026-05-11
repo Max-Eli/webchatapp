@@ -17,10 +17,9 @@ import { Button } from "@/components/Button";
 import { LanguageSelect } from "@/components/LanguageSelect";
 import { ChatOverlay } from "@/components/ChatOverlay";
 import { VideoTile } from "@/components/VideoTile";
-import { type ChatMessage } from "@/lib/chat";
-import { useWebRTC } from "@/components/useWebRTC";
+import { type ChatMessage, type ChatPayload } from "@/lib/chat";
+import { useLiveKit } from "@/components/useLiveKit";
 import { cn } from "@/lib/cn";
-import type { ChatPayload } from "@/lib/webrtc";
 
 const NAME_KEY = "lingo.name";
 const LANG_KEY = "lingo.lang";
@@ -90,7 +89,7 @@ export function RoomClient({ roomId }: { roomId: string }) {
     setPeerName(n || "Friend");
   }, []);
 
-  const rtc = useWebRTC({
+  const rtc = useLiveKit({
     roomId,
     myName: name || "Guest",
     myLang: lang,

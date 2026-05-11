@@ -2,9 +2,9 @@
 
 A 1-on-1 mobile webapp for video calling friends who don't speak your language. Type in your language, your friend reads it in theirs. Translation by Claude.
 
-- **Peer-to-peer video** (WebRTC) — no media server, no per-minute cost.
-- **Peer-to-peer chat** (WebRTC DataChannel) — messages flow direct between browsers.
+- **Video + audio** via [LiveKit Cloud](https://livekit.io/cloud) — handles signaling, TURN, ICE so calls work on any network.
 - **Live translation** via Claude API — your messages get translated for the receiver, theirs get translated for you.
+- **Stream-style chat overlay** — always visible on top of the video, no tabs.
 - **No accounts** — just shareable room links like `mki-pwfn-xrt`.
 - **Mobile-first** — works in iOS Safari and Android Chrome.
 
@@ -16,18 +16,19 @@ A 1-on-1 mobile webapp for video calling friends who don't speak your language. 
 2. Settings → API Keys → Create Key.
 3. Copy the key (`sk-ant-...`).
 
-### 2. Get Supabase keys (used for WebRTC signaling only — no database needed)
+### 2. Set up LiveKit Cloud (free tier)
 
-WebRTC needs a tiny "handshake" channel to connect two browsers. Vercel can't host WebSockets, so we use Supabase Realtime for free.
+LiveKit handles the entire video calling infrastructure — you don't think about WebRTC, TURN, or NATs.
 
-1. Go to https://supabase.com → sign in (GitHub login works).
-2. **New project** → pick any name + region → set a DB password (you won't use it).
-3. Wait ~2 minutes for it to provision.
-4. **Project Settings → API**, copy:
-   - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
-   - **anon public** key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+1. Go to https://livekit.io/cloud → sign up (Google login works).
+2. Create a project — pick any name + region close to you.
+3. Open the project → **Settings** → **Keys**.
+4. Copy:
+   - **WebSocket URL** (e.g. `wss://your-project.livekit.cloud`) → `NEXT_PUBLIC_LIVEKIT_URL`
+   - **API Key** (starts with `API`) → `LIVEKIT_API_KEY`
+   - **API Secret** → `LIVEKIT_API_SECRET`
 
-No tables to create. Realtime is on by default.
+Free tier: 100 monthly active users + 50 GB bandwidth. Plenty for personal use.
 
 ### 3. Local environment
 
@@ -35,7 +36,7 @@ No tables to create. Realtime is on by default.
 cp .env.example .env.local
 ```
 
-Fill in the three values in `.env.local`.
+Fill in the four values in `.env.local`.
 
 ### 4. Run
 
@@ -44,7 +45,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000. Open the generated room link in a second browser (or your phone on the same network — but for getUserMedia on a phone, you'll need HTTPS, which dev mode doesn't have. Easiest: deploy to Vercel and test there).
+Open http://localhost:3000. To test on your phone, deploy to Vercel (next section) — getUserMedia requires HTTPS, which dev mode doesn't provide.
 
 ## Deploy to Vercel
 
@@ -52,33 +53,39 @@ Open http://localhost:3000. Open the generated room link in a second browser (or
 2. https://vercel.com/new → import the repo.
 3. Add env vars in **Project Settings → Environment Variables**:
    - `ANTHROPIC_API_KEY`
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-4. Deploy.
+   - `LIVEKIT_API_KEY`
+   - `LIVEKIT_API_SECRET`
+   - `NEXT_PUBLIC_LIVEKIT_URL`
+4. Deploy. After it's live, send the URL to your friend.
 
-That's it. Free tier covers everything: Vercel (hobby), Supabase (free), and you only pay for Claude tokens (translation is via Haiku — cents per thousand messages).
+Total monthly cost for normal personal use: $0.
 
 ## How it works
 
 ```
-Browser A  ───presence + offer/answer/ICE───▶  Supabase Realtime  ◀───presence + offer/answer/ICE───  Browser B
-   │                                                                                                       │
-   └────────────────── WebRTC peer connection (video + audio + chat data) ─────────────────────────────────┘
-                                                  │
-                                                  ▼
-                                        /api/translate (Claude Haiku)
-                                        called by the receiving peer
-                                        to render foreign-language messages
+Browser A  ─┐                                     ┌─ Browser B
+            │   /api/token (mints JWT)            │
+            ├──────────────────────────────────── ┤
+            │                                     │
+            └──── LiveKit Cloud (SFU + TURN) ─────┘
+                  · video tracks
+                  · audio tracks
+                  · data packets (chat)
+                              │
+                              ▼
+                  /api/translate (Claude Haiku)
+                  called by the receiving peer
+                  to render foreign-language messages
 ```
 
-- Each room is a Supabase Realtime channel `room:<id>`. Both peers track presence and exchange the SDP offer/answer + ICE candidates over `broadcast` events. Once connected, no more signaling traffic.
-- Video/audio tracks and chat messages flow over the direct WebRTC connection — Supabase never sees them.
+- Each room is a LiveKit room named after the room code (`aaa-bbbb-ccc`).
+- The Next.js server mints a short-lived access token; the browser uses it to join the LiveKit room.
+- Camera, microphone, and chat data flow through LiveKit's media servers (works regardless of NAT).
 - Chat messages carry a language tag. The receiver's client calls `/api/translate` to render foreign-language messages in the reader's language. Originals are toggleable.
-- Translation responses are cached client-side per `(source, target, text)` so changing your language redoes only what's missing.
+- Translation responses are cached client-side per `(source, target, text)`.
 
 ## Limitations / next steps
 
-- **NAT traversal**: uses public Google STUN. Most consumer networks work, but very strict NATs (corporate / symmetric) need a TURN server. Cheapest path: self-host coturn on a $5 VPS, or pay-as-you-go Twilio TURN (~$0.40/GB).
-- **2 peers per room.** Group calls would need an SFU (LiveKit / mediasoup).
-- **No persistence.** Messages disappear when you reload. Add a Supabase Postgres table if you want history.
-- **No identity verification.** Anyone with the link joins. Fine for a personal app; add auth if you ever need it.
+- **2 peers per room** (we enforce this on the client). Group calls would just need to lift that cap.
+- **No persistence.** Messages disappear when you reload. Add a database if you want history.
+- **No identity verification.** Anyone with the link joins. Fine for a personal app.

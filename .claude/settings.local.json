@@ -13,7 +13,11 @@
       "Bash(git commit -m ' *)",
       "Bash(git remote *)",
       "Bash(git push *)",
-      "Bash(git rm *)"
+      "Bash(git rm *)",
+      "Bash(npm uninstall *)",
+      "Bash(node -e \"const c = require\\('livekit-client'\\); console.log\\('Room:', typeof c.Room, 'RoomEvent:', typeof c.RoomEvent, 'Track:', typeof c.Track, 'DataPacket_Kind:', typeof c.DataPacket_Kind\\); console.log\\('events sample:', Object.keys\\(c.RoomEvent\\).slice\\(0,5\\)\\)\")",
+      "Bash(node -e \"const s = require\\('livekit-server-sdk'\\); console.log\\('AccessToken:', typeof s.AccessToken\\)\")",
+      "Bash(npm ls *)"
     ]
   }
 }
