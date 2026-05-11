@@ -54,6 +54,7 @@ export function useLiveKit(opts: Options) {
   const [connectionState, setConnectionState] =
     useState<string>("disconnected");
   const [presenceCount, setPresenceCount] = useState<number>(0);
+  const [roomName, setRoomName] = useState<string>("");
 
   const identityRef = useRef<string>("");
   if (!identityRef.current && typeof crypto !== "undefined") {
@@ -306,6 +307,8 @@ export function useLiveKit(opts: Options) {
     setStatus("connecting");
     try {
       await room.connect(url, token);
+      setRoomName(room.name || "");
+      log("connected to room:", room.name);
     } catch (e) {
       setError(
         e instanceof Error ? e.message : "Could not connect to LiveKit"
@@ -428,6 +431,8 @@ export function useLiveKit(opts: Options) {
       iceState: "—",
       pcState: connectionState,
       iceSource: "livekit",
+      roomName,
+      requestedRoom: opts.roomId,
     },
   };
 }

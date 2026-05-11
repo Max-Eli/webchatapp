@@ -362,6 +362,9 @@ export function RoomClient({ roomId }: { roomId: string }) {
               <div className="text-[var(--text-dim)]">
                 turn: {rtc.diag.iceSource}
               </div>
+              <div className="text-[var(--text-dim)] truncate">
+                room: {rtc.diag.roomName || "—"}
+              </div>
             </div>
           )}
         </div>
