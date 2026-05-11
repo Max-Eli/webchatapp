@@ -249,6 +249,8 @@ export function RoomClient({ roomId }: { roomId: string }) {
         return peerName;
       case "peer_left":
         return "Your friend left — waiting…";
+      case "connection_failed":
+        return "Couldn't connect (network)";
       case "room_full":
         return "Room is full";
       case "media_error":
@@ -380,7 +382,7 @@ export function RoomClient({ roomId }: { roomId: string }) {
 
       {/* Error toasts */}
       <AnimatePresence>
-        {rtc.error && (rtc.status === "media_error" || rtc.status === "config_error") && (
+        {rtc.error && (rtc.status === "media_error" || rtc.status === "config_error" || rtc.status === "connection_failed") && (
           <motion.div
             initial={{ y: -20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}

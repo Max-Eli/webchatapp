@@ -13,9 +13,17 @@ export type Status =
   | "connecting"
   | "connected"
   | "peer_left"
+  | "connection_failed"
   | "room_full"
   | "ended"
   | "config_error";
+
+const log = (...args: unknown[]) => {
+  if (typeof window !== "undefined") {
+    // eslint-disable-next-line no-console
+    console.log("[lingo]", ...args);
+  }
+};
 
 type Options = {
   roomId: string;
@@ -87,14 +95,21 @@ export function useWebRTC(opts: Options) {
       }
     };
     pc.ontrack = (e) => {
+      log("ontrack", e.track.kind);
       setRemoteStream(e.streams[0] ?? null);
+    };
+    pc.oniceconnectionstatechange = () => {
+      log("ice state:", pc.iceConnectionState);
     };
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState;
+      log("pc state:", s);
       if (s === "connected") setStatus("connected");
       else if (s === "failed") {
-        // Connection failed — likely NAT/firewall. Surface it.
-        setStatus("peer_left");
+        setStatus("connection_failed");
+        setError(
+          "Could not establish a direct connection. This usually means a firewall or strict NAT — a TURN server may be required."
+        );
       }
     };
     return pc;
@@ -102,6 +117,7 @@ export function useWebRTC(opts: Options) {
 
   const initiateOffer = useCallback(async () => {
     if (!localStreamRef.current || !otherPeerIdRef.current) return;
+    log("creating offer for", otherPeerIdRef.current);
     const pc = createPeerConnection();
     pcRef.current = pc;
     const dc = pc.createDataChannel("chat", { ordered: true });
@@ -122,6 +138,7 @@ export function useWebRTC(opts: Options) {
       from: peerIdRef.current,
       to: otherPeerIdRef.current,
     });
+    log("offer sent");
   }, [createPeerConnection, sendBroadcast, setupDataChannel]);
 
   const handleOffer = useCallback(
@@ -159,6 +176,7 @@ export function useWebRTC(opts: Options) {
         from: peerIdRef.current,
         to: from,
       });
+      log("answer sent");
     },
     [createPeerConnection, sendBroadcast, setupDataChannel]
   );
@@ -282,7 +300,7 @@ export function useWebRTC(opts: Options) {
     localStreamRef.current = stream;
     setLocalStream(stream);
 
-    const channel = supabase.channel(`room:${optsRef.current.roomId}`, {
+    const channel = supabase.channel(`room-${optsRef.current.roomId}`, {
       config: {
         presence: { key: peerIdRef.current },
         broadcast: { self: false, ack: false },
@@ -290,9 +308,28 @@ export function useWebRTC(opts: Options) {
     });
     channelRef.current = channel;
 
+    const tryStartWith = (target: string) => {
+      if (otherPeerIdRef.current) return;
+      otherPeerIdRef.current = target;
+      isOffererRef.current = peerIdRef.current < target;
+      log(
+        "peer paired:",
+        target,
+        "(I'm",
+        isOffererRef.current ? "offerer)" : "answerer)"
+      );
+      setStatus("connecting");
+      if (isOffererRef.current) {
+        void initiateOffer();
+      }
+    };
+
+    // Use sync only for initial state + room-full check.
+    // Use join/leave for definitive peer changes.
     channel.on("presence", { event: "sync" }, () => {
       const state = channel.presenceState();
       const peers = Object.keys(state);
+      log("presence sync:", peers);
 
       if (peers.length > 2) {
         const sorted = [...peers].sort();
@@ -305,30 +342,34 @@ export function useWebRTC(opts: Options) {
       }
 
       const others = peers.filter((p) => p !== peerIdRef.current);
-      if (others.length === 0) {
-        if (otherPeerIdRef.current) {
-          tearDownPeer();
-          setStatus("peer_left");
-        } else {
-          setStatus("waiting");
-        }
+      if (others.length === 0 && !otherPeerIdRef.current) {
+        setStatus("waiting");
         return;
       }
+      if (others.length > 0 && !otherPeerIdRef.current) {
+        tryStartWith(others[0]);
+      }
+    });
 
-      const target = others[0];
-      if (!otherPeerIdRef.current) {
-        otherPeerIdRef.current = target;
-        isOffererRef.current = peerIdRef.current < target;
-        setStatus("connecting");
-        if (isOffererRef.current) {
-          void initiateOffer();
-        }
+    channel.on("presence", { event: "join" }, ({ key }) => {
+      if (key === peerIdRef.current) return;
+      log("presence join:", key);
+      tryStartWith(key);
+    });
+
+    channel.on("presence", { event: "leave" }, ({ key }) => {
+      if (key === peerIdRef.current) return;
+      log("presence leave:", key);
+      if (otherPeerIdRef.current === key) {
+        tearDownPeer();
+        setStatus("peer_left");
       }
     });
 
     channel.on("broadcast", { event: "offer" }, ({ payload }) => {
       const p = payload as IncomingPayload;
       if (p.to !== peerIdRef.current) return;
+      log("recv offer from", p.from);
       void handleOffer(
         p.sdp as RTCSessionDescriptionInit,
         p.from as string
@@ -337,6 +378,7 @@ export function useWebRTC(opts: Options) {
     channel.on("broadcast", { event: "answer" }, ({ payload }) => {
       const p = payload as IncomingPayload;
       if (p.to !== peerIdRef.current) return;
+      log("recv answer");
       void handleAnswer(p.sdp as RTCSessionDescriptionInit);
     });
     channel.on("broadcast", { event: "ice" }, ({ payload }) => {
@@ -353,6 +395,7 @@ export function useWebRTC(opts: Options) {
     });
 
     await channel.subscribe(async (state) => {
+      log("channel state:", state);
       if (state === "SUBSCRIBED") {
         await channel.track({
           peer_id: peerIdRef.current,
