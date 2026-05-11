@@ -89,15 +89,34 @@ export function useWebRTC(opts: Options) {
   }, []);
 
   const createPeerConnection = useCallback(() => {
-    const pc = new RTCPeerConnection({ iceServers: iceServersRef.current });
+    const useRelayOnly =
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).has("relay");
+    if (useRelayOnly) log("FORCING TURN-only mode (?relay=1)");
+    const pc = new RTCPeerConnection({
+      iceServers: iceServersRef.current,
+      iceTransportPolicy: useRelayOnly ? "relay" : "all",
+      iceCandidatePoolSize: 4,
+    });
     pc.onicecandidate = (e) => {
       const other = otherPeerIdRef.current;
-      if (e.candidate && other) {
-        void sendBroadcast("ice", {
-          candidate: e.candidate.toJSON(),
-          from: peerIdRef.current,
-          to: other,
-        });
+      if (e.candidate) {
+        log(
+          "ice cand:",
+          e.candidate.type,
+          e.candidate.protocol,
+          "→",
+          e.candidate.address || "?"
+        );
+        if (other) {
+          void sendBroadcast("ice", {
+            candidate: e.candidate.toJSON(),
+            from: peerIdRef.current,
+            to: other,
+          });
+        }
+      } else {
+        log("ice gathering complete");
       }
     };
     pc.ontrack = (e) => {
